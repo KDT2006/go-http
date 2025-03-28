@@ -1,12 +1,18 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"example.com/httpfromtcp/internal/headers"
 	"example.com/httpfromtcp/internal/request"
 	"example.com/httpfromtcp/internal/response"
 	"example.com/httpfromtcp/internal/server"
@@ -17,8 +23,9 @@ const port = 42069
 func main() {
 	// Custom Handler func
 	customHandlerFunc := func(w *response.Writer, req *request.Request) *server.HandleError {
-		switch req.RequestLine.RequestTarget {
-		case "/yourproblem":
+		target := req.RequestLine.RequestTarget
+		switch {
+		case target == "/yourproblem":
 			content := `<html>
   <head>
     <title>400 Bad Request</title>
@@ -36,7 +43,7 @@ func main() {
 				StatusCode: response.BadRequest,
 				Message:    content,
 			}
-		case "/myproblem":
+		case target == "/myproblem":
 			content := `<html>
   <head>
     <title>500 Internal Server Error</title>
@@ -54,6 +61,82 @@ func main() {
 				StatusCode: response.InternalServerErrror,
 				Message:    content,
 			}
+
+		// handle proxy
+		case strings.HasPrefix(target, "/httpbin/"):
+			fmt.Println(target)
+
+			target := strings.TrimPrefix(target, "/httpbin/")
+
+			resp, err := http.Get(fmt.Sprintf("https://httpbin.org/%s", target))
+			if err != nil {
+				log.Println("error: http.Get() failed for proxying:", err)
+				return &server.HandleError{
+					StatusCode: response.InternalServerErrror,
+					Message:    err.Error(),
+				}
+			}
+			defer resp.Body.Close()
+
+			// Remove Content-Length and add Transfer-Encoding header
+			resp.Header.Del("Content-Length")
+			resp.Header.Add("Transfer-Encoding", "chunked")
+			// Announce X-Content-SHA256 and X-Content-Length as trailers in the Trailer header
+			resp.Header.Add("Trailer", "X-Content-SHA256")
+			resp.Header.Add("Trailer", "X-Content-Length")
+
+			// Buffer for storing all of body
+			bodyBuf := bytes.Buffer{}
+
+			// Read chunks from response
+			for {
+				buf := make([]byte, 1024)
+				n, err := resp.Body.Read(buf)
+				if err != nil {
+					if err == io.EOF {
+						log.Println("Successfully read and transferred all chunks to client")
+
+						// Calculate hash of the full response body and add the Trailers
+						bodyHash := sha256.Sum256(bodyBuf.Bytes())
+
+						trailers := headers.NewHeaders()
+						trailers["X-Content-SHA256"] = fmt.Sprintf("%x", bodyHash)
+						trailers["X-Content-Length"] = fmt.Sprintf("%d", bodyBuf.Len())
+
+						err := w.WriteTrailers(trailers)
+						if err != nil {
+							log.Println("error: w.WriteTrailers() failed:", err)
+						}
+
+						return nil
+					}
+
+					log.Println("error: resp.Body.Read() failed:", err)
+					return &server.HandleError{
+						StatusCode: response.InternalServerErrror,
+						Message:    err.Error(),
+					}
+				}
+				fmt.Printf("Read %d bytes from resp\n", n)
+
+				// Write response back to client
+				_, err = w.Conn.Write(buf[:n])
+				if err != nil {
+					log.Println("error: conn.Write() failed writing resp back to client:", err)
+					return nil
+				}
+
+				// Append to bodyBuf
+				_, err = bodyBuf.Write(buf)
+				if err != nil {
+					log.Println("error: bodyBuf.Write() failed appending to buffer:", err)
+					return &server.HandleError{
+						StatusCode: response.InternalServerErrror,
+						Message:    err.Error(),
+					}
+				}
+			}
+
 		default:
 			content := `<html>
   <head>

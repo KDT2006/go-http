@@ -152,3 +152,18 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 
 	return 0, nil
 }
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	// Write the headers with \r\n
+	for key, value := range h {
+		_, err := w.Conn.Write([]byte(fmt.Sprintf("%s: %s\r\n", key, value)))
+		if err != nil {
+			log.Println("error: w.Conn.Write() failed writing Trailers:", err)
+			return err
+		}
+	}
+
+	// Last CRLF for signalling the end
+	_, err := w.Conn.Write([]byte("\r\n"))
+	return err
+}
