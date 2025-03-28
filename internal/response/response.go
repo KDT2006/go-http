@@ -107,3 +107,48 @@ func GetDefaultHeaders(contentLen int) headers.Headers {
 
 	return headers
 }
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	// End of chunks
+	if len(p) == 0 {
+		n, err := w.WriteChunkedBodyDone()
+		if err != nil {
+			log.Println("error: WriteChunkedBodyDone() failed:", err)
+			return 0, err
+		}
+		return n, nil
+	}
+
+	// Write out the size in hex
+	contentLen := len(p)
+	contentLenHex := fmt.Sprintf("%x\r\n", contentLen)
+	_, err := w.Conn.Write([]byte(contentLenHex))
+	if err != nil {
+		return 0, err
+	}
+
+	// Write the content
+	_, err = w.Conn.Write(p)
+	_, err = w.Conn.Write([]byte("\r\n"))
+	if err != nil {
+		return 0, err
+	}
+
+	return len(p), nil
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	// Write 0 and CRLF
+	zeroHex := fmt.Sprintf("%x", 0)
+	_, err := w.Conn.Write([]byte(zeroHex))
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = w.Conn.Write([]byte("\r\n"))
+	if err != nil {
+		return 0, err
+	}
+
+	return 0, nil
+}

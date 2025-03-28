@@ -3,8 +3,11 @@ package server
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"net/http"
+	"strings"
 	"sync/atomic"
 
 	"example.com/httpfromtcp/internal/request"
@@ -79,6 +82,46 @@ func (s *Server) handle(conn net.Conn) {
 		return
 	}
 
+	// Proxy handler for httpbin
+	if strings.HasPrefix(parsedReq.RequestLine.RequestTarget, "/httpbin/") {
+		fmt.Println(parsedReq.RequestLine.RequestTarget)
+		target := strings.TrimPrefix(parsedReq.RequestLine.RequestTarget, "/httpbin/")
+
+		resp, err := http.Get(fmt.Sprintf("https://httpbin.org/%s", target))
+		if err != nil {
+			log.Println("error: http.Get() failed for proxying:", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		// Remove Content-Length and add Transfer-Encoding header
+		resp.Header.Del("Content-Length")
+		resp.Header.Add("Transfer-Encoding", "chunked")
+
+		// Read chunks from response
+		for {
+			buf := make([]byte, 1024)
+			n, err := resp.Body.Read(buf)
+			if err != nil {
+				if err == io.EOF {
+					log.Println("Successfully read and transferred all chunks to client")
+					return
+				}
+
+				log.Println("error: resp.Body.Read() failed:", err)
+				return
+			}
+			fmt.Printf("Read %d bytes from resp\n", n)
+
+			// Write response back to client
+			_, err = conn.Write(buf[:n])
+			if err != nil {
+				log.Println("error: conn.Write() failed writing resp back to client:", err)
+				return
+			}
+		}
+	}
+
 	// Buffer for the handler to write to
 	buf := new(bytes.Buffer)
 
@@ -90,10 +133,10 @@ func (s *Server) handle(conn net.Conn) {
 	handlerErr := s.Handler(responseWriter, parsedReq)
 	if handlerErr != nil {
 		s.writeError(responseWriter)
-		return
 	}
 
-	// Write to connection if there's no error
+	// Write to connection regardless of error
+	// as everything will be written to buf
 	_, err = conn.Write(buf.Bytes())
 	if err != nil {
 		log.Println("error: conn.Write() failed:", err)
