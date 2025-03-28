@@ -137,6 +137,55 @@ func main() {
 				}
 			}
 
+		// handle video
+		case strings.HasPrefix(target, "/video"):
+			// Check if the request method is GET
+			if req.RequestLine.Method == "GET" {
+				data, err := os.ReadFile("assets/vim.mp4")
+				if err != nil {
+					log.Println("error: os.ReadFile() failed when reading the video into memory:", err)
+					return &server.HandleError{
+						StatusCode: response.InternalServerErrror,
+						Message:    err.Error(),
+					}
+				}
+
+				// Populate the response with necessary data
+				w.Headers = response.GetDefaultHeaders(len(data))
+				w.Headers.Replace("Content-Type", "video/mp4")
+				w.Status = response.OK
+				w.Body = data
+
+				// Write the Status line
+				err = w.WriteStatusLine()
+				if err != nil {
+					log.Println("error: WriteStatusLine() failed:", err)
+					return &server.HandleError{
+						StatusCode: response.InternalServerErrror,
+						Message:    err.Error(),
+					}
+				}
+
+				// Create and write the response headers
+				err = w.WriteHeaders()
+				if err != nil {
+					log.Println("error: response.WriteStatusLine() failed:", err)
+					return &server.HandleError{
+						StatusCode: response.InternalServerErrror,
+						Message:    err.Error(),
+					}
+				}
+
+				// Write the response body
+				_, err = w.WriteBody()
+				if err != nil {
+					log.Println("error: conn.Write() failed:", err)
+					return &server.HandleError{
+						StatusCode: response.InternalServerErrror,
+						Message:    err.Error(),
+					}
+				}
+			}
 		default:
 			content := `<html>
   <head>
@@ -149,7 +198,6 @@ func main() {
 </html>`
 			w.Headers = response.GetDefaultHeaders(len(content))
 			w.Headers.Replace("Content-Type", "text/html; charset=utf-8")
-			fmt.Printf("%+v\n", w.Headers)
 			w.Status = response.OK
 			w.Body = []byte(content)
 
@@ -184,6 +232,8 @@ func main() {
 			}
 			return nil
 		}
+
+		return nil
 	}
 
 	server, err := server.Serve(port, customHandlerFunc)
