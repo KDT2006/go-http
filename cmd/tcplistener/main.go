@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	"example.com/httpfromtcp/internal/request"
+	"github.com/KDT2006/go-http/internal/request"
 )
 
 func main() {

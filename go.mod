@@ -1,4 +1,4 @@
-module example.com/httpfromtcp
+module github.com/KDT2006/go-http
 
 go 1.24.1
 

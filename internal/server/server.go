@@ -7,8 +7,8 @@ import (
 	"net"
 	"sync/atomic"
 
-	"example.com/httpfromtcp/internal/request"
-	"example.com/httpfromtcp/internal/response"
+	"github.com/KDT2006/go-http/internal/request"
+	"github.com/KDT2006/go-http/internal/response"
 )
 
 type Server struct {

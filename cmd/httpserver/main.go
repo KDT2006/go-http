@@ -12,10 +12,10 @@ import (
 	"strings"
 	"syscall"
 
-	"example.com/httpfromtcp/internal/headers"
-	"example.com/httpfromtcp/internal/request"
-	"example.com/httpfromtcp/internal/response"
-	"example.com/httpfromtcp/internal/server"
+	"github.com/KDT2006/go-http/internal/headers"
+	"github.com/KDT2006/go-http/internal/request"
+	"github.com/KDT2006/go-http/internal/response"
+	"github.com/KDT2006/go-http/internal/server"
 )
 
 const port = 42069

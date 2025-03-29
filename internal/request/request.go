@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"example.com/httpfromtcp/internal/headers"
+	"github.com/KDT2006/go-http/internal/headers"
 )
 
 const (
