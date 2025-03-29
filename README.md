@@ -31,7 +31,7 @@ cd go-http
 go run ./cmd/httpserver/main.go
 ```
 
-## **Sameple Endpoints(main.go)**
+## **Sameple Endpoints(httpserver)**
 
 ### 1. Success
 
